@@ -83,8 +83,12 @@ def ask(payload: AskIn):
         {"source": c.source, "heading": c.heading, "score": s} for c, s in hits
     ]
     if os.getenv("OPENAI_API_KEY"):
-        answer = llm_answer(payload.question, hits)
-        model = os.getenv("COPILOT_MODEL", "gpt-4o-mini")
+        try:
+            answer = llm_answer(payload.question, hits)
+            model = os.getenv("COPILOT_MODEL", "gpt-4o-mini")
+        except Exception:
+            answer = compose_fallback_answer(payload.question, hits)
+            model = "retrieval-fallback"
     else:
         answer = compose_fallback_answer(payload.question, hits)
         model = "retrieval-fallback"
