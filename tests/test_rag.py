@@ -18,4 +18,11 @@ def test_retriever_finds_zelle_section():
 def test_every_doc_loads():
     r = PolicyRetriever()
     sources = {c.source for c in r.chunks}
-    assert len(sources) == 5
+    assert len(sources) == 6
+
+
+def test_retriever_finds_mortgage_section():
+    r = PolicyRetriever()
+    hits = r.search("foreclosure notice came while my loan modification application was being reviewed")
+    top = hits[0][0]
+    assert top.source == "mortgage_servicing.md"

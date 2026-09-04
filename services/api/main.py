@@ -1,11 +1,21 @@
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+import requests
 from fastapi import Depends, FastAPI, HTTPException
 
 from . import storage
 from .model.classifier import ComplaintClassifier
-from .schemas import Complaint, ComplaintIn, PredictIn, PredictOut, StatsOut
+from .schemas import (
+    Complaint,
+    ComplaintIn,
+    DraftReplyIn,
+    DraftReplyOut,
+    PredictIn,
+    PredictOut,
+    StatsOut,
+)
 
 
 @asynccontextmanager
@@ -19,6 +29,8 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+RAG_URL = os.getenv("RAG_SERVICE_URL", "http://localhost:8002")
 
 
 def get_conn():
@@ -60,6 +72,41 @@ def get_complaint(complaint_id: int, conn=Depends(get_conn)):
     if row is None:
         raise HTTPException(status_code=404, detail="complaint not found")
     return dict(row)
+
+
+@app.post("/draft-reply", response_model=DraftReplyOut)
+def draft_reply(payload: DraftReplyIn):
+    """Classify the complaint, then call the RAG service for a grounded draft.
+
+    Service-to-service orchestration against RAG_URL with graceful degradation:
+    if the RAG service is down, triage still returns with rag_available=False.
+    """
+    triage = app.state.classifier.predict(payload.text)
+    draft = "Policy assistant unavailable - triage returned, draft the reply manually."
+    citations = []
+    model = None
+    rag_available = False
+    try:
+        resp = requests.post(
+            f"{RAG_URL}/ask",
+            json={"question": payload.text},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        draft = data["answer"]
+        citations = data["citations"]
+        model = data["model"]
+        rag_available = True
+    except requests.RequestException:
+        pass
+    return {
+        **triage,
+        "draft_answer": draft,
+        "citations": citations,
+        "model": model,
+        "rag_available": rag_available,
+    }
 
 
 @app.get("/stats/summary", response_model=StatsOut)

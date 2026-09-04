@@ -5,6 +5,10 @@ services:
       dockerfile: services/api/Dockerfile
     ports:
       - "8001:8001"
+    environment:
+      - RAG_SERVICE_URL=http://rag-service:8002
+    depends_on:
+      - rag-service
 
   rag-service:
     build:

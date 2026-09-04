@@ -41,6 +41,7 @@ docker compose up --build
 
 - `POST /complaints` — file a complaint; response includes the auto-assigned `category` and `priority`
 - `POST /predict` — classify complaint text without storing it
+- `POST /draft-reply` — one-call orchestration: classifies the complaint, then calls the RAG service for a policy-grounded draft reply with citations. Returns triage data with `rag_available: false` if the RAG service is down
 - `GET /complaints`, `GET /complaints/{id}` — list / fetch
 - `GET /stats/summary` — totals, per-category counts, high-priority count
 - `POST /ask` (rag service) — retrieve policy sections and draft a reply, returns citations
@@ -48,9 +49,10 @@ docker compose up --build
 ## Design notes
 
 - The classifier is TF-IDF + logistic regression. I picked that over a heavier transformer model on purpose: complaint categories are well separated by vocabulary ("overdraft fee", "wire", "APR"), and this trains in under a second and runs on a laptop. Swapping in embeddings later is a one-file change in the retriever/classifier.
-- Retrieval also uses TF-IDF + cosine similarity rather than a vector database, for the same reason — the corpus is five policy docs. The retrieval code is isolated in `services/rag/retriever.py` so Chroma or pgvector can slot in without touching the API.
+- Retrieval also uses TF-IDF + cosine similarity rather than a vector database, for the same reason — the corpus is six policy docs. The retrieval code is isolated in `services/rag/retriever.py` so Chroma or pgvector can slot in without touching the API.
 - The LLM only ever sees retrieved policy excerpts plus the agent's question, and the system prompt forbids inventing numbers. The citations come back with every answer so an agent can check the source section before sending anything to a customer.
 - Priority is rule-based on top of the classifier: fraud, P2P scams, and mortgage servicing are always flagged high because of regulatory deadlines.
+- Service-to-service calls between complaint-api and rag-service go over plain HTTP with a timeout and a fallback path, configured by `RAG_SERVICE_URL`. Explicitly avoided: a service mesh or async messaging — overkill for a two-hop sync call, and the failure mode (RAG down) degrades to triage-only instead of failing the request.
 
 ## Tests
 

@@ -44,3 +44,23 @@ class StatsOut(BaseModel):
     total: int
     by_category: list[CategoryStat]
     high_priority: int
+
+
+class DraftReplyIn(BaseModel):
+    text: str = Field(..., min_length=10)
+
+
+class CitationOut(BaseModel):
+    source: str
+    heading: str
+    score: float
+
+
+class DraftReplyOut(BaseModel):
+    category: str
+    confidence: float
+    priority: str
+    draft_answer: str
+    citations: list[CitationOut]
+    model: Optional[str]
+    rag_available: bool
